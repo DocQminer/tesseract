@@ -19,6 +19,7 @@
 #include "dotproduct.h"
 #include "dotproductavx.h"
 #include "dotproductsse.h"
+#include "intsimdmatrix.h"   // for IntSimdMatrix
 #include "params.h"   // for STRING_VAR
 #include "tprintf.h"  // for tprintf
 
@@ -68,8 +69,9 @@ static double DotProductGeneric(const double* u, const double* v, int n) {
   return total;
 }
 
-static void SetDotProduct(DotProductFunction function) {
-  DotProduct = function;
+static void SetDotProduct(DotProductFunction f, const IntSimdMatrix* m = nullptr) {
+  DotProduct = f;
+  IntSimdMatrix::intSimdMatrix = m;
 }
 
 // Constructor.
@@ -123,15 +125,20 @@ SIMDDetect::SIMDDetect() {
   // Select code for calculation of dot product based on autodetection.
   if (false) {
     // This is a dummy to support conditional compilation.
+#if defined(AVX2)
+  } else if (avx2_available_) {
+    // AVX2 detected.
+    SetDotProduct(DotProductAVX, &IntSimdMatrix::intSimdMatrixAVX2);
+#endif
 #if defined(AVX)
   } else if (avx_available_) {
     // AVX detected.
-    SetDotProduct(DotProductAVX);
+    SetDotProduct(DotProductAVX, &IntSimdMatrix::intSimdMatrixSSE);
 #endif
 #if defined(SSE4_1)
   } else if (sse_available_) {
     // SSE detected.
-    SetDotProduct(DotProductSSE);
+    SetDotProduct(DotProductSSE, &IntSimdMatrix::intSimdMatrixSSE);
 #endif
   }
 }
@@ -150,16 +157,22 @@ void SIMDDetect::Update() {
     // Native optimized code selected by config variable.
     SetDotProduct(DotProductNative);
     dotproduct_method = "native";
+#if defined(AVX2)
+  } else if (!strcmp(dotproduct.string(), "avx2")) {
+    // AVX2 selected by config variable.
+    SetDotProduct(DotProductAVX, &IntSimdMatrix::intSimdMatrixAVX2);
+    dotproduct_method = "avx2";
+#endif
 #if defined(AVX)
   } else if (!strcmp(dotproduct.string(), "avx")) {
     // AVX selected by config variable.
-    SetDotProduct(DotProductAVX);
+    SetDotProduct(DotProductAVX, &IntSimdMatrix::intSimdMatrixSSE);
     dotproduct_method = "avx";
 #endif
 #if defined(SSE4_1)
   } else if (!strcmp(dotproduct.string(), "sse")) {
     // SSE selected by config variable.
-    SetDotProduct(DotProductSSE);
+    SetDotProduct(DotProductSSE, &IntSimdMatrix::intSimdMatrixSSE);
     dotproduct_method = "sse";
 #endif
   } else {
